@@ -1,18 +1,13 @@
-FROM debian:wheezy-slim
+FROM ubuntu:xenial
 
 # add our user and group first to make sure their IDs get assigned consistently, regardless of whatever dependencies get added
 RUN groupadd -r mongodb && useradd -r -g mongodb mongodb
-
-# add "wheezy-backports" for "jq"
-RUN echo 'deb http://deb.debian.org/debian wheezy-backports main' > /etc/apt/sources.list.d/backports.list
 
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends \
 		ca-certificates \
 		jq \
 		numactl \
-# ps is not in base debian:wheezy image
-		procps \
 	&& rm -rf /var/lib/apt/lists/*
 
 # grab gosu for easy step-down from root (https://github.com/tianon/gosu/releases)
@@ -34,6 +29,7 @@ RUN set -ex; \
 	export GNUPGHOME="$(mktemp -d)"; \
 	gpg --keyserver ha.pool.sks-keyservers.net --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4; \
 	gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu; \
+	command -v gpgconf && gpgconf --kill all || :; \
 	rm -r "$GNUPGHOME" /usr/local/bin/gosu.asc; \
 	chmod +x /usr/local/bin/gosu; \
 	gosu nobody true; \
@@ -46,14 +42,18 @@ RUN set -ex; \
 RUN mkdir /docker-entrypoint-initdb.d
 
 ENV GPG_KEYS \
-# gpg: key 7F0CEB10: public key "Richard Kreuter <richard@10gen.com>" imported
-	492EAFE8CD016A07919F1D2B9ECBEC467F0CEB10
+# pub   rsa4096 2018-04-18 [SC] [expires: 2023-04-17]
+#       E162 F504 A20C DF15 827F  718D 4B7C 549A 058F 8B6B
+# uid           [ unknown] MongoDB 4.2 Release Signing Key <packaging@mongodb.com>
+	E162F504A20CDF15827F718D4B7C549A058F8B6B
+# https://docs.mongodb.com/manual/tutorial/verify-mongodb-packages/#download-then-import-the-key-file
 RUN set -ex; \
 	export GNUPGHOME="$(mktemp -d)"; \
 	for key in $GPG_KEYS; do \
 		gpg --keyserver ha.pool.sks-keyservers.net --recv-keys "$key"; \
 	done; \
 	gpg --export $GPG_KEYS > /etc/apt/trusted.gpg.d/mongodb.gpg; \
+	command -v gpgconf && gpgconf --kill all || :; \
 	rm -r "$GNUPGHOME"; \
 	apt-key list
 
@@ -61,14 +61,14 @@ RUN set -ex; \
 # Options for MONGO_PACKAGE: mongodb-org OR mongodb-enterprise
 # Options for MONGO_REPO: repo.mongodb.org OR repo.mongodb.com
 # Example: docker build --build-arg MONGO_PACKAGE=mongodb-enterprise --build-arg MONGO_REPO=repo.mongodb.com .
-ARG MONGO_PACKAGE=mongodb-org
+ARG MONGO_PACKAGE=mongodb-org-unstable
 ARG MONGO_REPO=repo.mongodb.org
 ENV MONGO_PACKAGE=${MONGO_PACKAGE} MONGO_REPO=${MONGO_REPO}
 
-ENV MONGO_MAJOR 3.0
-ENV MONGO_VERSION 3.0.15
+ENV MONGO_MAJOR 4.1
+ENV MONGO_VERSION 4.1.1
 
-RUN echo "deb http://$MONGO_REPO/apt/debian wheezy/${MONGO_PACKAGE%-unstable}/$MONGO_MAJOR main" | tee "/etc/apt/sources.list.d/${MONGO_PACKAGE%-unstable}.list"
+RUN echo "deb http://$MONGO_REPO/apt/ubuntu xenial/${MONGO_PACKAGE%-unstable}/$MONGO_MAJOR multiverse" | tee "/etc/apt/sources.list.d/${MONGO_PACKAGE%-unstable}.list"
 
 RUN set -x \
 	&& apt-get update \
@@ -87,7 +87,6 @@ RUN mkdir -p /data/db /data/configdb \
 VOLUME /data/db /data/configdb
 
 COPY docker-entrypoint.sh /usr/local/bin/
-RUN ln -s usr/local/bin/docker-entrypoint.sh /entrypoint.sh # backwards compat
 ENTRYPOINT ["docker-entrypoint.sh"]
 
 EXPOSE 27017
