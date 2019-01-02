@@ -11,7 +11,7 @@ originalArgOne="$1"
 # all mongo* commands should be dropped to the correct user
 if [[ "$originalArgOne" == mongo* ]] && [ "$(id -u)" = '0' ]; then
 	if [ "$originalArgOne" = 'mongod' ]; then
-		chown -R mongodb /data/configdb /data/db
+		find /data/configdb /data/db \! -user mongodb -exec chown mongodb '{}' +
 	fi
 
 	# make sure we can write to stdout and stderr as "mongodb"
@@ -168,7 +168,7 @@ _dbPath() {
 
 	if ! dbPath="$(_mongod_hack_get_arg_val --dbpath "$@")"; then
 		if _parse_config "$@"; then
-			dbPath="$(jq '.storage.dbPath' "$jsonConfigFile")"
+			dbPath="$(jq -r '.storage.dbPath // empty' "$jsonConfigFile")"
 		fi
 	fi
 
@@ -312,7 +312,7 @@ if [ "$originalArgOne" = 'mongod' ]; then
 			echo
 		done
 
-		"$@" --pidfilepath="$pidfile" --shutdown
+		"${mongodHackedArgs[@]}" --shutdown
 		rm -f "$pidfile"
 
 		echo
@@ -321,15 +321,17 @@ if [ "$originalArgOne" = 'mongod' ]; then
 	fi
 
 	# MongoDB 3.6+ defaults to localhost-only binding
-	haveBindIp=
-	if _mongod_hack_have_arg --bind_ip "$@" || _mongod_hack_have_arg --bind_ip_all "$@"; then
-		haveBindIp=1
-	elif _parse_config "$@" && jq --exit-status '.net.bindIp // .net.bindIpAll' "$jsonConfigFile" > /dev/null; then
-		haveBindIp=1
-	fi
-	if [ -z "$haveBindIp" ]; then
-		# so if no "--bind_ip" is specified, let's add "--bind_ip_all"
-		set -- "$@" --bind_ip_all
+	if mongod --help 2>&1 | grep -q -- --bind_ip_all; then # TODO remove this conditional when 3.4 is no longer supported
+		haveBindIp=
+		if _mongod_hack_have_arg --bind_ip "$@" || _mongod_hack_have_arg --bind_ip_all "$@"; then
+			haveBindIp=1
+		elif _parse_config "$@" && jq --exit-status '.net.bindIp // .net.bindIpAll' "$jsonConfigFile" > /dev/null; then
+			haveBindIp=1
+		fi
+		if [ -z "$haveBindIp" ]; then
+			# so if no "--bind_ip" is specified, let's add "--bind_ip_all"
+			set -- "$@" --bind_ip_all
+		fi
 	fi
 
 	unset "${!MONGO_INITDB_@}"
