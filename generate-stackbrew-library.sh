@@ -3,9 +3,8 @@ set -eu
 
 declare -A aliases=(
 	[3.6]='3'
-	[4.0]='4 latest'
-	[4.1]='unstable'
-	[4.2-rc]='rc'
+	[4.4]='4 latest'
+	[4.5]='unstable'
 )
 
 self="$(basename "$BASH_SOURCE")"
@@ -101,8 +100,8 @@ for version in "${versions[@]}"; do
 	EOE
 
 	for v in \
-		windows/windowsservercore-{ltsc2016,1803} \
-		windows/nanoserver-{sac2016,1803} \
+		windows/windowsservercore-{1809,ltsc2016} \
+		windows/nanoserver-{1809,sac2016} \
 	; do
 		dir="$version/$v"
 		variant="$(basename "$v")"

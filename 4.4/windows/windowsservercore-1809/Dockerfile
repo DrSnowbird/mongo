@@ -1,19 +1,21 @@
-FROM microsoft/windowsservercore:ltsc2016
+FROM mcr.microsoft.com/windows/servercore:1809
 
 SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop';"]
 
-ENV MONGO_VERSION 4.1.13
-ENV MONGO_DOWNLOAD_URL https://downloads.mongodb.org/win32/mongodb-win32-x86_64-2012plus-4.1.13-signed.msi
-ENV MONGO_DOWNLOAD_SHA256 682c5913d551d3508cb3446fe4929ae97552b5a344469855b58c9473f4f58dd6
+ENV MONGO_VERSION 4.4.4
+ENV MONGO_DOWNLOAD_URL https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-4.4.4-signed.msi
+ENV MONGO_DOWNLOAD_SHA256=170eda3fb648ade8350a5bb0f1ffa367d81b020ea18e6e9e28107a77fff0d340
 
 RUN Write-Host ('Downloading {0} ...' -f $env:MONGO_DOWNLOAD_URL); \
 	[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; \
 	(New-Object System.Net.WebClient).DownloadFile($env:MONGO_DOWNLOAD_URL, 'mongo.msi'); \
 	\
-	Write-Host ('Verifying sha256 ({0}) ...' -f $env:MONGO_DOWNLOAD_SHA256); \
-	if ((Get-FileHash mongo.msi -Algorithm sha256).Hash -ne $env:MONGO_DOWNLOAD_SHA256) { \
-		Write-Host 'FAILED!'; \
-		exit 1; \
+	if ($env:MONGO_DOWNLOAD_SHA256) { \
+		Write-Host ('Verifying sha256 ({0}) ...' -f $env:MONGO_DOWNLOAD_SHA256); \
+		if ((Get-FileHash mongo.msi -Algorithm sha256).Hash -ne $env:MONGO_DOWNLOAD_SHA256) { \
+			Write-Host 'FAILED!'; \
+			exit 1; \
+		}; \
 	}; \
 	\
 	Write-Host 'Installing ...'; \
@@ -24,9 +26,18 @@ RUN Write-Host ('Downloading {0} ...' -f $env:MONGO_DOWNLOAD_URL); \
 			'mongo.msi', \
 			'/quiet', \
 			'/qn', \
+			'/l*v', 'install.log', \
+# https://docs.mongodb.com/manual/tutorial/install-mongodb-on-windows-unattended/#run-the-windows-installer-from-the-windows-command-interpreter
 			'INSTALLLOCATION=C:\mongodb', \
-			'ADDLOCAL=all' \
+			'ADDLOCAL=ServerNoService,Client,Router,MiscellaneousTools' \
 		); \
+	if (-Not (Test-Path C:\mongodb\bin\mongo.exe -PathType Leaf)) { \
+		Write-Host 'Installer failed!'; \
+		Get-Content install.log; \
+		exit 1; \
+	}; \
+	Remove-Item install.log; \
+	\
 	$env:PATH = 'C:\mongodb\bin;' + $env:PATH; \
 	[Environment]::SetEnvironmentVariable('PATH', $env:PATH, [EnvironmentVariableTarget]::Machine); \
 	\
@@ -35,7 +46,6 @@ RUN Write-Host ('Downloading {0} ...' -f $env:MONGO_DOWNLOAD_URL); \
 	Write-Host '  mongod --version'; mongod --version; \
 	\
 	Write-Host 'Removing ...'; \
-	Remove-Item C:\mongodb\bin\*.pdb -Force; \
 	Remove-Item C:\windows\installer\*.msi -Force; \
 	Remove-Item mongo.msi -Force; \
 	\

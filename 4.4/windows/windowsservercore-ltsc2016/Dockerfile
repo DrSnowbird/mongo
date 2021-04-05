@@ -1,10 +1,10 @@
-FROM mcr.microsoft.com/windows/servercore:placeholder
+FROM mcr.microsoft.com/windows/servercore:ltsc2016
 
 SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop';"]
 
-ENV MONGO_VERSION placeholder
-ENV MONGO_DOWNLOAD_URL placeholder
-ENV MONGO_DOWNLOAD_SHA256=placeholder
+ENV MONGO_VERSION 4.4.4
+ENV MONGO_DOWNLOAD_URL https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-4.4.4-signed.msi
+ENV MONGO_DOWNLOAD_SHA256=170eda3fb648ade8350a5bb0f1ffa367d81b020ea18e6e9e28107a77fff0d340
 
 RUN Write-Host ('Downloading {0} ...' -f $env:MONGO_DOWNLOAD_URL); \
 	[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; \
@@ -29,7 +29,7 @@ RUN Write-Host ('Downloading {0} ...' -f $env:MONGO_DOWNLOAD_URL); \
 			'/l*v', 'install.log', \
 # https://docs.mongodb.com/manual/tutorial/install-mongodb-on-windows-unattended/#run-the-windows-installer-from-the-windows-command-interpreter
 			'INSTALLLOCATION=C:\mongodb', \
-			'ADDLOCAL=placeholder' \
+			'ADDLOCAL=ServerNoService,Client,Router,MiscellaneousTools' \
 		); \
 	if (-Not (Test-Path C:\mongodb\bin\mongo.exe -PathType Leaf)) { \
 		Write-Host 'Installer failed!'; \
